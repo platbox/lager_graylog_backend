@@ -35,7 +35,8 @@ get_raw_data(Message, Config) ->
 
     HostName = get_host(getvalue(host, Config)),
 
-    MetaData = lager_msg:metadata(Message),
+    WasMetaData = lager_msg:metadata(Message),
+    MetaData = set_md_defaults(WasMetaData),
 
     TS = unix_timestamp(lager_msg:timestamp(Message)),
 
@@ -47,12 +48,25 @@ get_raw_data(Message, Config) ->
      {line, getvalue(line, MetaData, -1)},
      {file, list_to_binary(atom_to_list(getvalue(module, MetaData)))},
      {host, list_to_binary(HostName)},
-     {facility, list_to_binary(getvalue(facility, Config, "erlang"))},
-     {'_from_pid', get_pid(getvalue(pid, MetaData))},
-     {'_node', list_to_binary(atom_to_list(getvalue(node, MetaData)))},
-     {'_application', list_to_binary(atom_to_list(getvalue(application, MetaData)))},
-     {'_module', list_to_binary(atom_to_list(getvalue(module, MetaData)))},
-     {'_function', list_to_binary(atom_to_list(getvalue(function, MetaData)))}].
+     {facility, list_to_binary(getvalue(facility, Config, "erlang"))}
+    ] ++ lists:map(fun format_metadata/1, MetaData).
+
+set_md_defaults(MetaData) ->
+    set_md_defaults(MetaData, [
+        {pid, undefined},
+        {node, undefined},
+        {application, <<"unknown">>},
+        {module, undefined},
+        {function, undefined}
+    ]).
+
+set_md_defaults(MetaData, []) ->
+    MetaData;
+set_md_defaults(MetaData, [Def = {Key, _} | Rest]) ->
+    case lists:keyfind(Key, 1, MetaData) of
+        false -> set_md_defaults([Def | MetaData], Rest);
+        _ -> set_md_defaults(MetaData, Rest)
+    end.
 
 get_pid(Pid) when is_pid(Pid) ->
     list_to_binary(pid_to_list(Pid));
@@ -62,6 +76,21 @@ get_pid(Pid) when is_list(Pid) ->
     list_to_binary(Pid);
 get_pid(_) ->
     <<"malformed">>.
+
+format_metadata({pid, V}) ->
+    {'_pid', get_pid(V)};
+format_metadata({K, V}) when is_binary(V) ->
+    {additional_field_name(K), V};
+format_metadata({K, V}) ->
+    F = try
+            iolist_to_binary(V)
+        catch _T:_E ->
+            list_to_binary(lager_trunc_io:fprint(V, 4000))
+    end,
+    {additional_field_name(K), F}.
+
+additional_field_name(N) when is_atom(N) ->
+    list_to_atom("_" ++ atom_to_list(N)).
 
 syslog_severity(debug) ->
     7;
@@ -89,10 +118,10 @@ get_host(HostName) ->
     HostName.
 
 get_short_message(Msg, MaxSize) ->
-    case size(Msg) =< MaxSize of 
-        true -> 
+    case size(Msg) =< MaxSize of
+        true ->
             Msg;
-        _ -> 
+        _ ->
             <<SM:MaxSize/binary,_/binary>> = Msg,
             SM
     end.
@@ -120,7 +149,7 @@ unix_timestamp({Mega, Sec, Micro}) ->
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 
-get_value_test_() -> 
+get_value_test_() ->
     [
         ?_assertEqual(undefined, getvalue(test, [])),
         ?_assertEqual(undefined, getvalue(test, [{other, "test"}])),
@@ -129,7 +158,7 @@ get_value_test_() ->
         ?_assertEqual("test", getvalue(other, [{other, "test"}], "default"))
         ].
 
-compressed_test_() -> 
+compressed_test_() ->
     [
         ?_assertEqual("msg", compressed("msg", disabled)),
         ?_assertEqual(zlib:gzip("msg"), compressed("msg", gzip)),
@@ -199,14 +228,14 @@ get_raw_data_test() ->
                 {file, <<"undefined">>},
                 {host, <<"localhost">>},
                 {facility, <<"erlang">>},
-                {'_from_pid', <<"unknown">>},
+                {'_pid', <<"unknown">>},
                 {'_node', <<"undefined">>},
                 {'_application', <<"lager_graylog_backend">>},
                 {'_module', <<"undefined">>},
                 {'_function', <<"undefined">>}
                ],
 
-    ?assertEqual(Expected, Data).
+    ?assertEqual(lists:sort(Expected), lists:sort(Data)).
 
 format_2_test() ->
     Now = os:timestamp(),
@@ -228,11 +257,11 @@ format_2_test() ->
                               {file, <<"undefined">>},
                               {host, <<"localhost">>},
                               {facility, <<"erlang">>},
-                              {'_from_pid', <<"unknown">>},
-                              {'_node', <<"undefined">>},
-                              {'_application', <<"lager_graylog_backend">>},
+                              {'_function', <<"undefined">>},
                               {'_module', <<"undefined">>},
-                              {'_function', <<"undefined">>}
+                              {'_node', <<"undefined">>},
+                              {'_pid', <<"unknown">>},
+                              {'_application', <<"lager_graylog_backend">>}
                              ]}),
 
     ?assertEqual(Expected, Data).
@@ -256,11 +285,11 @@ format_3_test() ->
                               {file, <<"undefined">>},
                               {host, <<"localhost">>},
                               {facility, <<"erlang">>},
-                              {'_from_pid', <<"unknown">>},
-                              {'_node', <<"undefined">>},
-                              {'_application', <<"lager_graylog_backend">>},
+                              {'_function', <<"undefined">>},
                               {'_module', <<"undefined">>},
-                              {'_function', <<"undefined">>}
+                              {'_node', <<"undefined">>},
+                              {'_pid', <<"unknown">>},
+                              {'_application', <<"lager_graylog_backend">>}
                              ]}),
 
     ?assertEqual(Expected, Data).
@@ -289,11 +318,11 @@ format_2_with_extra_fields_test() ->
                               {file, <<"undefined">>},
                               {host, <<"localhost">>},
                               {facility, <<"lager-test">>},
-                              {'_from_pid', <<"unknown">>},
-                              {'_node', <<"undefined">>},
-                              {'_application', <<"lager_graylog_backend">>},
-                              {'_module', <<"undefined">>},
                               {'_function', <<"undefined">>},
+                              {'_module', <<"undefined">>},
+                              {'_node', <<"undefined">>},
+                              {'_pid', <<"unknown">>},
+                              {'_application', <<"lager_graylog_backend">>},
                               {'_environment', <<"test">>}
                              ]}),
 
