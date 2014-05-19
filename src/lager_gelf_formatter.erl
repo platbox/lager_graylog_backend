@@ -55,7 +55,7 @@ set_md_defaults(MetaData) ->
     set_md_defaults(MetaData, [
         {pid, undefined},
         {node, undefined},
-        {application, <<"unknown">>},
+        {application, undefined},
         {module, undefined},
         {function, undefined}
     ]).
