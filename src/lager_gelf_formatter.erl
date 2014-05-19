@@ -77,8 +77,8 @@ get_pid(Pid) when is_list(Pid) ->
 get_pid(_) ->
     <<"malformed">>.
 
-format_metadata({pid, V}) ->
-    {'_pid', get_pid(V)};
+format_metadata({K = pid, V}) ->
+    {additional_field_name(K), get_pid(V)};
 format_metadata({K, V}) when is_binary(V) ->
     {additional_field_name(K), V};
 format_metadata({K, V}) ->
@@ -90,7 +90,8 @@ format_metadata({K, V}) ->
     {additional_field_name(K), F}.
 
 additional_field_name(N) when is_atom(N) ->
-    list_to_atom("_" ++ atom_to_list(N)).
+    F = atom_to_binary(N, utf8),
+    <<"_", F/binary>>.
 
 syslog_severity(debug) ->
     7;
@@ -228,11 +229,11 @@ get_raw_data_test() ->
                 {file, <<"undefined">>},
                 {host, <<"localhost">>},
                 {facility, <<"erlang">>},
-                {'_pid', <<"unknown">>},
-                {'_node', <<"undefined">>},
-                {'_application', <<"lager_graylog_backend">>},
-                {'_module', <<"undefined">>},
-                {'_function', <<"undefined">>}
+                {<<"_pid">>, <<"unknown">>},
+                {<<"_node">>, <<"undefined">>},
+                {<<"_application">>, <<"lager_graylog_backend">>},
+                {<<"_module">>, <<"undefined">>},
+                {<<"_function">>, <<"undefined">>}
                ],
 
     ?assertEqual(lists:sort(Expected), lists:sort(Data)).
