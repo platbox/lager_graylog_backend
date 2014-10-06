@@ -28,7 +28,7 @@ format(Message, Config) ->
     compressed(Json, getvalue(compression, Config, gzip)).
 
 get_raw_data(Message, Config) ->
-    LongMessage = iolist_to_binary(lager_msg:message(Message)),
+    LongMessage = unicode:characters_to_binary(lager_msg:message(Message)),
 
     ShortMessageSize = getvalue(short_message_size, Config, 80),
     ShortMessage = get_short_message(LongMessage, ShortMessageSize),
