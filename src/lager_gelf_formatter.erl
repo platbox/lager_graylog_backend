@@ -28,10 +28,11 @@ format(Message, Config) ->
     compressed(Json, getvalue(compression, Config, gzip)).
 
 get_raw_data(Message, Config) ->
-    LongMessage = unicode:characters_to_binary(lager_msg:message(Message)),
+    RawMessage = lager_msg:message(Message),
+    LongMessage = unicode:characters_to_binary(RawMessage),
 
     ShortMessageSize = getvalue(short_message_size, Config, 80),
-    ShortMessage = get_short_message(LongMessage, ShortMessageSize),
+    ShortMessage = get_short_message(RawMessage, ShortMessageSize),
 
     HostName = get_host(getvalue(host, Config)),
 
@@ -119,12 +120,11 @@ get_host(HostName) ->
     HostName.
 
 get_short_message(Msg, MaxSize) ->
-    case size(Msg) =< MaxSize of
+    case length(Msg) =< MaxSize of
         true ->
-            Msg;
+            unicode:characters_to_binary(Msg);
         _ ->
-            <<SM:MaxSize/binary,_/binary>> = Msg,
-            SM
+            unicode:characters_to_binary(lists:sublist(Msg, MaxSize))
     end.
 
 compressed(Data, disabled) ->
