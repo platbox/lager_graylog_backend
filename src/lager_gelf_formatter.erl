@@ -120,11 +120,12 @@ get_host(HostName) ->
     HostName.
 
 get_short_message(Msg, MaxSize) ->
-    case length(Msg) =< MaxSize of
+    FlatMsg = unicode:characters_to_list(Msg),
+    case length(FlatMsg) =< MaxSize of
         true ->
             unicode:characters_to_binary(Msg);
         _ ->
-            unicode:characters_to_binary(lists:sublist(Msg, MaxSize))
+            unicode:characters_to_binary(lists:sublist(FlatMsg, MaxSize))
     end.
 
 compressed(Data, disabled) ->
@@ -171,7 +172,7 @@ get_short_message_test_() ->
     [
         ?_assertEqual(<<"a cut">>, get_short_message(<<"a cut message">>, 5)),
         ?_assertEqual(<<"not cut message">>, get_short_message(<<"not cut message">>, 80)),
-        ?_assertException(error, badarg, get_short_message("not cut message", 80))
+        ?_assertEqual(<<"not cut message">>, get_short_message("not cut message", 80))
         ].
 
 get_host_test_() ->

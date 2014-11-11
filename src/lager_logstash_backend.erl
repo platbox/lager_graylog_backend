@@ -14,31 +14,29 @@
 %% specific language governing permissions and limitations
 %% under the License.
 
--module(lager_graylog_backend).
+-module(lager_logstash_backend).
 
 -behaviour(gen_event).
 
 -export([init/1, handle_call/2, handle_event/2, handle_info/2, terminate/2,
          code_change/3]).
 
--include_lib("lager/include/lager.hrl").
-
 %
 % Lager backend for graylog
 %
 % The backend must be configured in the lager's configuration section:
 %
-% {lager_graylog_backend, [
-%    {host, "<graylog_host>:<graylog_port>"},
+% {lager_logstash_backend, [
+%    {host, "<host>:<port>"},
 %    {level, info},
-%    {name, graylog2},
+%    {name, logstash},
 %    {format_config, [
 %        {facility, "<facility>"}
 %    ]}
 %  ]}
 %
 
-init(Config) -> lager_udp_backend:init(?MODULE, lager_gelf_formatter, Config).
+init(Config) -> lager_udp_backend:init(?MODULE, lager_logstash_formatter, Config).
 
 %% @private
 
@@ -117,15 +115,14 @@ functional_test() ->
         {error, not_started}
     end,
 
-    Cfg = [{lager_graylog_backend, [
+    Cfg = [{lager_logstash_backend, [
                     {host, "localhost:"++integer_to_list(Port)},
                     {level, error},
-                    {name, graylog2},
+                    {name, logstash},
                     {format_config, [
                         {facility, "lager-test"},
-                        {short_message_size, 4},
                         {extra_fields, [
-                            {'_environment', <<"test">>}
+                            {'environment', <<"test">>}
                         ]}
                     ]}
                     ]}],
@@ -141,17 +138,16 @@ functional_test() ->
 
     {Res} = receive
         {data, Bin} ->
-            jiffy:decode(zlib:gunzip(Bin))
+            jiffy:decode(Bin)
     after 500 ->
             {error, message_not_received}
     end,
 
     ok = application:stop(lager),
 
-    ?assertEqual(<<"1.0">>, proplists:get_value(<<"version">>, Res)),
-    ?assertEqual(<<"This">>, proplists:get_value(<<"short_message">>, Res)),
-    ?assertEqual(<<"This is a test">>, proplists:get_value(<<"full_message">>, Res)),
-    ?assertEqual(<<"test">>, proplists:get_value(<<"_environment">>, Res)),
-    ?assertEqual(3, proplists:get_value(<<"level">>, Res)).
+    ?assertEqual(<<"1">>, proplists:get_value(<<"@version">>, Res)),
+    ?assertEqual(<<"This is a test">>, proplists:get_value(<<"message">>, Res)),
+    ?assertEqual(<<"test">>, proplists:get_value(<<"environment">>, Res)),
+    ?assertEqual(<<"error">>, proplists:get_value(<<"severity_label">>, Res)).
 
 -endif.

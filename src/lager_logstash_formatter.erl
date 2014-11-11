@@ -35,41 +35,36 @@ utc_iso_datetime(Message) ->
     UTCTime = {H, M, S, Micro div 1000 rem 1000},
 
     {RawDate, RawTime} = lager_util:format_time({UTCDate, UTCTime}),
-    iolist_to_binary(io_lib:format("~sT~sZ", [RawDate, RawTime])).
+    iolist_to_binary([RawDate, $T, RawTime, $Z]).
 
-    
 get_raw_data(Message, Config) ->
-    LongMessage = iolist_to_binary(lager_msg:message(Message)),
+    LongMessage = unicode:characters_to_binary(lager_msg:message(Message)),
 
     HostName = get_host(getvalue(host, Config)),
 
     MetaData = lager_msg:metadata(Message),
 
-    [{'@version',<<"1">>},
-     {severity_label, binary_severity(lager_msg:severity(Message))},
-     {message, LongMessage},
+    [{'@version', <<"1">>},
      {'@timestamp', utc_iso_datetime(Message)},
-     {host, list_to_binary(HostName)},
-     {facility_label, list_to_binary(getvalue(facility, Config, "user-level"))},
-     {'application', list_to_binary(atom_to_list(getvalue(application, MetaData)))},
+     {'severity_label', binary_severity(lager_msg:severity(Message))},
+     {'facility_label', iolist_to_binary(getvalue(facility, Config, <<"user-level">>))},
+     {'message', LongMessage},
+     {'host', iolist_to_binary(HostName)},
+     {'application', atom_to_binary(getvalue(application, MetaData), utf8)},
 
-     {erlang, {[
-         {line, getvalue(line, MetaData, -1)},
-         {file, list_to_binary(atom_to_list(getvalue(module, MetaData)))},
-         {'from_pid', get_pid(getvalue(pid, MetaData))},
-         {'node', list_to_binary(atom_to_list(getvalue(node, MetaData)))},
-         {'module', list_to_binary(atom_to_list(getvalue(module, MetaData)))},
-         {'function', list_to_binary(atom_to_list(getvalue(function, MetaData)))}]}}].
+     {erlang, {lists:filtermap(fun format_metadata/1, MetaData)}}
+    ].
 
-
-get_pid(Pid) when is_pid(Pid) ->
-    list_to_binary(pid_to_list(Pid));
-get_pid(undefined) ->
-    <<"unknown">>;
-get_pid(Pid) when is_list(Pid) ->
-    list_to_binary(Pid);
-get_pid(_) ->
-    <<"malformed">>.
+format_metadata({application, _}) -> false;
+format_metadata({_, undefined}) -> false;
+format_metadata({K, V}) when is_integer(V) -> {true, {K, integer_to_binary(V)}};
+format_metadata({K, V}) when is_atom(V)    -> {true, {K, atom_to_binary(V, utf8)}};
+format_metadata({K, V}) ->
+    {true,
+        {K, try iolist_to_binary(V) catch
+            _:_ -> unicode:characters_to_binary(lager_trunc_io:fprint(V, 1024))
+        end}
+    }.
 
 binary_severity(debug) ->
     <<"debug">>;
@@ -109,7 +104,7 @@ getvalue(Tag, List) ->
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 
-get_value_test_() -> 
+get_value_test_() ->
     [
         ?_assertEqual(undefined, getvalue(test, [])),
         ?_assertEqual(undefined, getvalue(test, [{other, "test"}])),
@@ -141,15 +136,6 @@ binary_severity_test_() ->
         ?_assertEqual(<<"debug">>, binary_severity("unknown"))
         ].
 
-get_pid_test_() ->
-    [
-        ?_assertEqual(<<"<0.0.0>">>, get_pid(list_to_pid("<0.0.0>"))),
-        ?_assertEqual(<<"unknown">>, get_pid(undefined)),
-        ?_assertEqual(<<"<0.0.0>">>, get_pid("<0.0.0>")),
-        ?_assertEqual(<<"malformed">>, get_pid(unknown))
-        ].
-
-
 get_raw_data_test() ->
     Now = os:timestamp(),
     MD = [{application, lager_graylog_backend}],
@@ -160,19 +146,13 @@ get_raw_data_test() ->
     Data = get_raw_data(Message, Cfg),
 
     Expected = [{'@version', <<"1">>},
-                {severity_label, <<"informational">>},
-                {message, <<"a message">>},
                 {'@timestamp', utc_iso_datetime(Message)},
-                {host, <<"localhost">>},
+                {severity_label, <<"informational">>},
                 {facility_label, <<"user-level">>},
+                {message, <<"a message">>},
+                {host, <<"localhost">>},
                 {'application', <<"lager_graylog_backend">>},
-                {erlang, {[
-                    {line, -1},
-                    {file, <<"undefined">>},
-                    {'from_pid', <<"unknown">>},
-                    {'node', <<"undefined">>},
-                    {'module', <<"undefined">>},
-                    {'function', <<"undefined">>}]}}
+                {erlang, {[]}}
                ],
 
     ?assertEqual(Expected, Data).
@@ -187,45 +167,35 @@ format_2_test() ->
     Data = format(Message, Cfg),
 
     Expected = jiffy:encode({[{'@version', <<"1">>},
-                              {severity_label, <<"informational">>},
-                              {message, <<"a message">>},
                               {'@timestamp', utc_iso_datetime(Message)},
-                              {host, <<"localhost">>},
+                              {severity_label, <<"informational">>},
                               {facility_label, <<"user-level">>},
+                              {message, <<"a message">>},
+                              {host, <<"localhost">>},
                               {'application', <<"lager_graylog_backend">>},
-                              {erlang, {[
-                                  {line, -1},
-                                  {file, <<"undefined">>},
-                                  {'from_pid', <<"unknown">>},
-                                  {'node', <<"undefined">>},
-                                  {'module', <<"undefined">>},
-                                  {'function', <<"undefined">>}]}}
-                             ]}),
+                              {erlang, {[]}}]}),
 
     ?assertEqual(<<Expected/binary,"\n">>, Data).
 
 format_3_test() ->
     Now = os:timestamp(),
-    MD = [{application, lager_graylog_backend}],
+    MD = [{application, lager_graylog_backend}, {module, ?MODULE}, {line, 42}, {pid, self()}],
     Cfg = [{host, "localhost"}],
 
     Message = lager_msg:new("a message", Now, info, MD, []),
     Data = format(Message, Cfg, []),
 
     Expected = jiffy:encode({[{'@version', <<"1">>},
-                              {severity_label, <<"informational">>},
-                              {message, <<"a message">>},
                               {'@timestamp', utc_iso_datetime(Message)},
-                              {host, <<"localhost">>},
+                              {severity_label, <<"informational">>},
                               {facility_label, <<"user-level">>},
+                              {message, <<"a message">>},
+                              {host, <<"localhost">>},
                               {'application', <<"lager_graylog_backend">>},
                               {erlang, {[
-                                  {line, -1},
-                                  {file, <<"undefined">>},
-                                  {'from_pid', <<"unknown">>},
-                                  {'node', <<"undefined">>},
-                                  {'module', <<"undefined">>},
-                                  {'function', <<"undefined">>}]}}
+                                  {'module', <<?MODULE_STRING>>},
+                                  {'line', <<"42">>},
+                                  {'pid', iolist_to_binary(pid_to_list(self()))}]}}
                              ]}),
 
     ?assertEqual(<<Expected/binary,"\n">>, Data).
@@ -244,19 +214,13 @@ format_2_with_extra_fields_test() ->
     Data = format(Message, Cfg),
 
     Expected = jiffy:encode({[{'@version', <<"1">>},
-                              {severity_label, <<"informational">>},
-                              {message, <<"a message">>},
                               {'@timestamp', utc_iso_datetime(Message)},
-                              {host, <<"localhost">>},
+                              {severity_label, <<"informational">>},
                               {facility_label, <<"lager-test">>},
+                              {message, <<"a message">>},
+                              {host, <<"localhost">>},
                               {'application', <<"lager_graylog_backend">>},
-                              {erlang, {[
-                                  {line, -1},
-                                  {file, <<"undefined">>},
-                                  {'from_pid', <<"unknown">>},
-                                  {'node', <<"undefined">>},
-                                  {'module', <<"undefined">>},
-                                  {'function', <<"undefined">>}]}},
+                              {erlang, {[]}},
                               {'extra', <<"test">>}
                              ]}),
 
