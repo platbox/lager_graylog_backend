@@ -58,8 +58,8 @@ format_metadata({K, V}) when is_integer(V) -> {true, {K, integer_to_binary(V)}};
 format_metadata({K, V}) when is_atom(V)    -> {true, {K, atom_to_binary(V, utf8)}};
 format_metadata({K, V}) ->
     {true,
-        {K, try iolist_to_binary(V) catch
-            _:_ -> unicode:characters_to_binary(lager_trunc_io:fprint(V, 1024))
+        {K, try unicode:characters_to_binary(V) catch
+            _:_ -> iolist_to_binary(lager_trunc_io:fprint(V, 1024))
         end}
     }.
 
@@ -175,7 +175,9 @@ format_2_test() ->
 
 format_3_test() ->
     Now = os:timestamp(),
-    MD = [{application, lager_graylog_backend}, {module, ?MODULE}, {line, 42}, {pid, self()}],
+    MD = [{application, lager_graylog_backend}, {module, ?MODULE}, {line, 42}, {pid, self()},
+          {crap, {sink, <<"МЕДВЕДИ"/utf8>>}},
+          {notcrap, "БАЛАЛАЙКА"}],
     Cfg = [{host, "localhost"}],
 
     Message = lager_msg:new("a message", Now, info, MD, []),
@@ -190,7 +192,9 @@ format_3_test() ->
                               {'application', <<"lager_graylog_backend">>},
                               {'module', <<?MODULE_STRING>>},
                               {'line', <<"42">>},
-                              {'pid', iolist_to_binary(pid_to_list(self()))}
+                              {'pid', iolist_to_binary(pid_to_list(self()))},
+                              {'crap', <<"{sink,<<208,156,208,149,208,148,208,146,208,149,208,148,208,152>>}">>},
+                              {'notcrap', <<"БАЛАЛАЙКА"/utf8>>}
                              ]}),
 
     ?assertEqual(<<Expected/binary,"\n">>, Data).
