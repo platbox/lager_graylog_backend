@@ -148,6 +148,6 @@ functional_test() ->
     ?assertEqual(<<"1">>, proplists:get_value(<<"@version">>, Res)),
     ?assertEqual(<<"This is a test">>, proplists:get_value(<<"message">>, Res)),
     ?assertEqual(<<"test">>, proplists:get_value(<<"environment">>, Res)),
-    ?assertEqual(<<"error">>, proplists:get_value(<<"severity_label">>, Res)).
+    ?assertEqual(<<"error">>, proplists:get_value(<<"severity">>, Res)).
 
 -endif.

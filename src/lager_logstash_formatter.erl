@@ -46,16 +46,13 @@ get_raw_data(Message, Config) ->
 
     [{'@version', <<"1">>},
      {'@timestamp', utc_iso_datetime(Message)},
-     {'severity_label', binary_severity(lager_msg:severity(Message))},
-     {'facility_label', iolist_to_binary(getvalue(facility, Config, <<"user-level">>))},
+     {'severity', binary_severity(lager_msg:severity(Message))},
+     {'facility', iolist_to_binary(getvalue(facility, Config, <<"user-level">>))},
      {'message', LongMessage},
-     {'host', iolist_to_binary(HostName)},
-     {'application', atom_to_binary(getvalue(application, MetaData), utf8)},
-
-     {erlang, {lists:filtermap(fun format_metadata/1, MetaData)}}
+     {'host', iolist_to_binary(HostName)} |
+       lists:filtermap(fun format_metadata/1, MetaData)
     ].
 
-format_metadata({application, _}) -> false;
 format_metadata({_, undefined}) -> false;
 format_metadata({K, V}) when is_integer(V) -> {true, {K, integer_to_binary(V)}};
 format_metadata({K, V}) when is_atom(V)    -> {true, {K, atom_to_binary(V, utf8)}};
@@ -147,12 +144,11 @@ get_raw_data_test() ->
 
     Expected = [{'@version', <<"1">>},
                 {'@timestamp', utc_iso_datetime(Message)},
-                {severity_label, <<"informational">>},
-                {facility_label, <<"user-level">>},
-                {message, <<"a message">>},
-                {host, <<"localhost">>},
-                {'application', <<"lager_graylog_backend">>},
-                {erlang, {[]}}
+                {'severity', <<"informational">>},
+                {'facility', <<"user-level">>},
+                {'message', <<"a message">>},
+                {'host', <<"localhost">>},
+                {'application', <<"lager_graylog_backend">>}
                ],
 
     ?assertEqual(Expected, Data).
@@ -168,12 +164,12 @@ format_2_test() ->
 
     Expected = jiffy:encode({[{'@version', <<"1">>},
                               {'@timestamp', utc_iso_datetime(Message)},
-                              {severity_label, <<"informational">>},
-                              {facility_label, <<"user-level">>},
-                              {message, <<"a message">>},
-                              {host, <<"localhost">>},
-                              {'application', <<"lager_graylog_backend">>},
-                              {erlang, {[]}}]}),
+                              {'severity', <<"informational">>},
+                              {'facility', <<"user-level">>},
+                              {'message', <<"a message">>},
+                              {'host', <<"localhost">>},
+                              {'application', <<"lager_graylog_backend">>}
+                              ]}),
 
     ?assertEqual(<<Expected/binary,"\n">>, Data).
 
@@ -187,15 +183,14 @@ format_3_test() ->
 
     Expected = jiffy:encode({[{'@version', <<"1">>},
                               {'@timestamp', utc_iso_datetime(Message)},
-                              {severity_label, <<"informational">>},
-                              {facility_label, <<"user-level">>},
-                              {message, <<"a message">>},
-                              {host, <<"localhost">>},
+                              {'severity', <<"informational">>},
+                              {'facility', <<"user-level">>},
+                              {'message', <<"a message">>},
+                              {'host', <<"localhost">>},
                               {'application', <<"lager_graylog_backend">>},
-                              {erlang, {[
-                                  {'module', <<?MODULE_STRING>>},
-                                  {'line', <<"42">>},
-                                  {'pid', iolist_to_binary(pid_to_list(self()))}]}}
+                              {'module', <<?MODULE_STRING>>},
+                              {'line', <<"42">>},
+                              {'pid', iolist_to_binary(pid_to_list(self()))}
                              ]}),
 
     ?assertEqual(<<Expected/binary,"\n">>, Data).
@@ -215,12 +210,11 @@ format_2_with_extra_fields_test() ->
 
     Expected = jiffy:encode({[{'@version', <<"1">>},
                               {'@timestamp', utc_iso_datetime(Message)},
-                              {severity_label, <<"informational">>},
-                              {facility_label, <<"lager-test">>},
-                              {message, <<"a message">>},
-                              {host, <<"localhost">>},
+                              {'severity', <<"informational">>},
+                              {'facility', <<"lager-test">>},
+                              {'message', <<"a message">>},
+                              {'host', <<"localhost">>},
                               {'application', <<"lager_graylog_backend">>},
-                              {erlang, {[]}},
                               {'extra', <<"test">>}
                              ]}),
 
