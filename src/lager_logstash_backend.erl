@@ -85,7 +85,7 @@ init_test() ->
 
     ?assertMatch({ok, #state{level=64, name={?MODULE, {"localhost", 12201}},
                            address={127,0,0,1}, port=12201,
-                           socket=_, format_config=[]}}, Res).
+                           socket=_, format_config=_}}, Res).
 
 handle_call_set_loglevel_test_() ->
     [

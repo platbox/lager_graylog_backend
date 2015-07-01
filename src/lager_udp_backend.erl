@@ -38,9 +38,14 @@ init(Module, Formatter, Config) ->
         port=Port,
         socket=Socket,
         formatter=Formatter,
-        format_config=FormatConfig}
+        format_config=fill_config_defaults(FormatConfig)}
     }.
 
+fill_config_defaults(FC) ->
+    {ok, HostName} = inet:gethostname(),
+    lists:ukeysort(1, FC ++ [
+        {host, HostName}
+    ]).
 
 %% @private
 
